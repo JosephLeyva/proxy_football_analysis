@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# Pesados o con derechos: se descargan aparte (ver taller/README.md)
+models/*.pt
+input_videos/*.mp4
+output_videos/*.mp4
+output_videos/calibration_check.jpg
