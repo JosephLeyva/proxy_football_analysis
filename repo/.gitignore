@@ -7,4 +7,4 @@ __pycache__/
 models/*.pt
 input_videos/*.mp4
 output_videos/*.mp4
-output_videos/calibration_check.jpg
+output_videos/calibration_check*.jpg

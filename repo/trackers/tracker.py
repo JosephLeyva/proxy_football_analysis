@@ -29,17 +29,79 @@ class Tracker:
                         position = get_foot_position(bbox)
                     tracks[object][frame_num][track_id]['position'] = position
 
-    def interpolate_ball_positions(self,ball_positions):
-        ball_positions = [x.get(1,{}).get('bbox',[]) for x in ball_positions]
+    def interpolate_ball_positions(self,ball_positions,max_gap=20):
+        ball_positions = [x.get(1,{}).get('bbox',[np.nan]*4) for x in ball_positions]
         df_ball_positions = pd.DataFrame(ball_positions,columns=['x1','y1','x2','y2'])
 
-        # Interpolate missing values
-        df_ball_positions = df_ball_positions.interpolate()
-        df_ball_positions = df_ball_positions.bfill()
+        # Interpolar solo huecos cortos: en un hueco largo el balon pudo ir a cualquier lado y una
+        # linea recta dibujaria el marcador lejos del balon real. Esos frames quedan sin balon.
+        missing = df_ball_positions['x1'].isna()
+        gap_id = (missing != missing.shift()).cumsum()
+        gap_len = missing.groupby(gap_id).transform('sum')
+        df_ball_positions = df_ball_positions.interpolate(limit_area='inside')
+        df_ball_positions[missing & (gap_len > max_gap)] = np.nan
 
-        ball_positions = [{1: {"bbox":x}} for x in df_ball_positions.to_numpy().tolist()]
+        ball_positions = [{1: {"bbox":x}} if not np.isnan(x[0]) else {}
+                          for x in df_ball_positions.to_numpy().tolist()]
 
         return ball_positions
+
+    def select_ball(self, tracks, to_meters, fps, max_speed=40, memory_seconds=0.5, margin=2,
+                    alone_distance=4, mark_radius=1.5, mark_seconds=1):
+        # YOLO a veces ve "balones" que no lo son: el punto penal, algo en el borde de la imagen.
+        # to_meters(frame_num, (x, y)) -> np.array([x_m, y_m]). Requiere 'position_transformed' en jugadores.
+
+        # Todas las candidatas en metros, con la distancia al jugador mas cercano
+        candidates = []   # (frame_num, posicion_m, bbox, confianza, distancia_jugador)
+        for frame_num, ball in enumerate(tracks["ball"]):
+            if 1 not in ball:
+                continue
+            players = np.array([p["position_transformed"] for p in tracks["players"][frame_num].values()
+                                if p.get("position_transformed") is not None]).reshape(-1, 2)
+            for c in ball[1].get("candidates", [ball[1]["bbox"] + [1.0]]):
+                position = to_meters(frame_num, get_center_of_bbox(c[:4]))
+                nearest = np.min(np.linalg.norm(players - position, axis=1)) if len(players) else np.inf
+                candidates.append((frame_num, position, c[:4], c[4], nearest))
+
+        # 1) Marcas del campo: una candidata sin jugadores cerca que reaparece en el mismo sitio
+        #    segundos despues (el punto penal no se mueve). Un balon quieto en un saque tiene a
+        #    alguien al lado; un balon en el aire no repite posicion.
+        positions = np.array([c[1] for c in candidates]).reshape(-1, 2)
+        frame_nums = np.array([c[0] for c in candidates])
+        def is_field_mark(i):
+            same_place = np.linalg.norm(positions - positions[i], axis=1) < mark_radius
+            later_or_earlier = np.abs(frame_nums - frame_nums[i]) >= mark_seconds*fps
+            return candidates[i][4] > alone_distance and np.any(same_place & later_or_earlier)
+        by_frame = {}
+        for i, c in enumerate(candidates):
+            if not is_field_mark(i):
+                by_frame.setdefault(c[0], []).append(c)
+
+        # 2) Continuidad: la candidata mas cercana a la ultima posicion conocida, si el balon pudo
+        #    llegar ahi (max_speed m/s ~ 144 km/h). Sin posicion reciente, la de mayor confianza.
+        memory = int(memory_seconds*fps)
+        last_position, last_frame = None, None
+        rejected = 0
+        for frame_num in range(len(tracks["ball"])):
+            if 1 not in tracks["ball"][frame_num]:
+                continue
+            options = by_frame.get(frame_num, [])
+            chosen = None
+            if options and last_position is not None and frame_num - last_frame <= memory:
+                reach = max_speed*(frame_num - last_frame)/fps + margin
+                closest = min(options, key=lambda o: np.linalg.norm(o[1] - last_position))
+                if np.linalg.norm(closest[1] - last_position) <= reach:
+                    chosen = closest
+            elif options:
+                chosen = max(options, key=lambda o: o[3])
+
+            if chosen is None:
+                tracks["ball"][frame_num] = {}
+                rejected += 1
+            else:
+                last_position, last_frame = chosen[1], frame_num
+                tracks["ball"][frame_num] = {1: {"bbox": chosen[2]}}
+        return rejected
 
     def detect_frames(self, frames):
         batch_size=20 
@@ -79,6 +141,17 @@ class Tracker:
                     if majority[track_id] == other:
                         tracks[other][frame_num][track_id] = tracks[object][frame_num].pop(track_id)
 
+    def remove_off_pitch(self, tracks):
+        # Personas cuyos pies caen fuera de la cancha (en metros): stewards, fotografos y
+        # recogebalones detras de la valla. Requiere position_transformed (ViewTransformer).
+        removed = 0
+        for object in ["players","referees"]:
+            for track in tracks[object]:
+                for track_id in [t for t, info in track.items() if info.get('position_transformed') is None]:
+                    del track[track_id]
+                    removed += 1
+        return removed
+
     def remove_short_tracks(self, tracks, min_frames=5):
         # Tracks que duran unos pocos frames son falsos positivos (parpadeos en el borde de la cancha)
         lifetimes = Counter(track_id for object in ["players","referees"]
@@ -111,7 +184,9 @@ class Tracker:
             detection_supervision = sv.Detections.from_ultralytics(detection)
             detection_supervision = self.filter_detections(frames[frame_num], detection_supervision)
 
-            # Convert GoalKeeper to player object
+            # Convert GoalKeeper to player object (guardando que YOLO lo vio como portero)
+            detection_supervision.data['is_goalkeeper'] = np.array(
+                [cls_names[c] == "goalkeeper" for c in detection_supervision.class_id], dtype=bool)
             for object_ind , class_id in enumerate(detection_supervision.class_id):
                 if cls_names[class_id] == "goalkeeper":
                     detection_supervision.class_id[object_ind] = cls_names_inv["player"]
@@ -127,18 +202,21 @@ class Tracker:
                 bbox = frame_detection[0].tolist()
                 cls_id = frame_detection[3]
                 track_id = frame_detection[4]
+                is_goalkeeper = bool(frame_detection[5]['is_goalkeeper'])
 
                 if cls_id == cls_names_inv['player']:
-                    tracks["players"][frame_num][track_id] = {"bbox":bbox}
+                    tracks["players"][frame_num][track_id] = {"bbox":bbox, "is_goalkeeper":is_goalkeeper}
                 
                 if cls_id == cls_names_inv['referee']:
                     tracks["referees"][frame_num][track_id] = {"bbox":bbox}
             
-            # Balon: si hay varias detecciones, quedarse con la de mayor confianza
+            # Balon: se guardan todas las candidatas (x1, y1, x2, y2, confianza); select_ball elige
+            # despues la que sigue la trayectoria. "bbox" es la de mayor confianza.
             ball_detections = detection_supervision[detection_supervision.class_id == cls_names_inv['ball']]
             if len(ball_detections) > 0:
                 best = int(np.argmax(ball_detections.confidence))
-                tracks["ball"][frame_num][1] = {"bbox":ball_detections.xyxy[best].tolist()}
+                candidates = [box.tolist() + [float(conf)] for box, conf in zip(ball_detections.xyxy, ball_detections.confidence)]
+                tracks["ball"][frame_num][1] = {"bbox":ball_detections.xyxy[best].tolist(), "candidates":candidates}
 
         self.fix_track_classes(tracks)
         self.remove_short_tracks(tracks)
@@ -212,8 +290,10 @@ class Tracker:
         return frame
 
     def draw_team_ball_control(self,frame,frame_num,team_ball_control,team_colors=None):
-        # Draw a semi-transparent rectaggle 
-        x1, y1, x2, y2 = self.ball_control_box
+        # Draw a semi-transparent rectaggle
+        # La caja esta definida para 1920x1080; se escala junto con el texto a la resolucion real
+        x1, y1, x2, y2 = scale_boxes([self.ball_control_box], frame.shape)[0]
+        s = frame.shape[0]/1080
         overlay = frame.copy()
         cv2.rectangle(overlay, (x1, y1), (x2, y2), (255,255,255), -1 )
         alpha = 0.4
@@ -227,18 +307,21 @@ class Tracker:
         team_1 = team_1_num_frames/total
         team_2 = team_2_num_frames/total
 
-        cv2.putText(frame, f"Posesion Equipo 1: {team_1*100:.1f}%",(x1+60,y1+50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 3)
-        cv2.putText(frame, f"Posesion Equipo 2: {team_2*100:.1f}%",(x1+60,y1+100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 3)
+        thickness = max(1, round(3*s))
+        cv2.putText(frame, f"Posesion Equipo 1: {team_1*100:.1f}%",(x1+int(60*s),y1+int(50*s)), cv2.FONT_HERSHEY_SIMPLEX, s, (0,0,0), thickness)
+        cv2.putText(frame, f"Posesion Equipo 2: {team_2*100:.1f}%",(x1+int(60*s),y1+int(100*s)), cv2.FONT_HERSHEY_SIMPLEX, s, (0,0,0), thickness)
 
         # Cuadrito con el color de cada equipo
         if team_colors:
             for i, team in enumerate([1,2]):
-                cv2.rectangle(frame, (x1+20,y1+25+50*i), (x1+45,y1+50+50*i), team_colors[team], cv2.FILLED)
-                cv2.rectangle(frame, (x1+20,y1+25+50*i), (x1+45,y1+50+50*i), (0,0,0), 2)
+                p1 = (x1+int(20*s), y1+int((25+50*i)*s))
+                p2 = (x1+int(45*s), y1+int((50+50*i)*s))
+                cv2.rectangle(frame, p1, p2, team_colors[team], cv2.FILLED)
+                cv2.rectangle(frame, p1, p2, (0,0,0), 2)
 
         return frame
 
-    def draw_annotations(self,video_frames, tracks,team_ball_control,team_colors=None):
+    def draw_annotations(self,video_frames, tracks,team_ball_control,team_colors=None,draw_ids=True):
         # Dibuja directamente sobre los frames (sin copiarlos) para no duplicar la RAM
         output_video_frames= []
         for frame_num, frame in enumerate(video_frames):
@@ -250,7 +333,7 @@ class Tracker:
             # Draw Players
             for track_id, player in player_dict.items():
                 color = player.get("team_color",(0,0,255))
-                frame = self.draw_ellipse(frame, player["bbox"],color, track_id)
+                frame = self.draw_ellipse(frame, player["bbox"],color, track_id if draw_ids else None)
 
                 if player.get('has_ball',False):
                     frame = self.draw_traingle(frame, player["bbox"],(0,0,255))

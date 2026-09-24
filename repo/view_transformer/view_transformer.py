@@ -2,24 +2,31 @@ import numpy as np
 import cv2
 
 class ViewTransformer():
-    def __init__(self, pixel_points, pitch_points, pitch_length=105, pitch_width=68):
-        # Homografia: pixeles del primer frame -> metros sobre la cancha.
+    def __init__(self, pixel_points, pitch_points, pitch_length=105, pitch_width=68, margin=0):
+        # Homografia: pixeles del frame de calibracion -> metros sobre la cancha.
         # Con 4 puntos basta; con mas, findHomography reparte el error entre todos.
         self.pixel_vertices = np.array(pixel_points, dtype=np.float32)
         self.target_vertices = np.array(pitch_points, dtype=np.float32)
 
         self.persepctive_trasnformer, _ = cv2.findHomography(self.pixel_vertices, self.target_vertices)
 
-        # Limites de la cancha en metros (x desde el medio campo, y desde la banda superior)
-        self.x_limit = pitch_length/2
-        self.y_limit = pitch_width
+        # Limites de la cancha en metros (x desde el medio campo, y desde la banda superior).
+        # El margen deja dentro a jueces de linea y saques de banda, pero no a quien esta tras la valla
+        self.x_limit = pitch_length/2 + margin
+        self.y_min = -margin
+        self.y_max = pitch_width + margin
+
+    def pixel_to_meters(self, point, frame_to_reference=np.eye(3)):
+        # Pixel de cualquier frame -> metros, sin revisar si cae dentro de la cancha
+        H = self.persepctive_trasnformer @ frame_to_reference
+        return cv2.perspectiveTransform(np.float32(point).reshape(1,1,2), H).ravel()
 
     def transform_point(self,point):
         reshaped_point = point.reshape(-1,1,2).astype(np.float32)
         tranform_point = cv2.perspectiveTransform(reshaped_point,self.persepctive_trasnformer).reshape(-1,2)
 
         x, y = tranform_point[0]
-        is_inside = abs(x) <= self.x_limit and 0 <= y <= self.y_limit
+        is_inside = abs(x) <= self.x_limit and self.y_min <= y <= self.y_max
         if not is_inside:
             return None
         return tranform_point

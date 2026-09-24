@@ -1,12 +1,13 @@
 # Football Analysis Project
 
-> **Versión adaptada para el taller "Visión con YOLO aplicada al fútbol"** (clip del Mundial 2026, CZE vs RSA).
+> **Versión adaptada para el taller "Visión con YOLO aplicada al fútbol"** (clip del Mundial 2026, CZE vs RSA, minuto 3:11–4:30 a 720p).
 > Notebook del taller: [`taller/taller_futbol_yolo.ipynb`](taller/taller_futbol_yolo.ipynb) · Guía: [`taller/README.md`](taller/README.md)
 >
 > ```bash
 > pip install -r requirements.txt
 > python main.py              # usa los stubs de stubs/ si existen
 > python main.py --recompute  # vuelve a correr YOLO y optical flow
+> python main.py --no-ids --no-speed   # video sin IDs ni velocidad/distancia (default en config.py)
 > python tools/calibrate_pitch.py --check   # verifica la homografia
 > ```
 >
@@ -14,7 +15,7 @@
 > - `config.py` centraliza rutas, calibración de la cancha y overlays de la transmisión (marcador, logo)
 > - Detecciones fuera de la cancha se filtran con una máscara de pasto; la clase jugador/árbitro se decide por mayoría en cada track
 > - Equipos: K-Means con jugadores de 10 frames y voto por jugador (se quitó el caso fijo `player_id == 91`)
-> - Movimiento de cámara: mediana del optical flow, acumulado respecto al frame 0 (el original usaba el desplazamiento de un solo frame)
+> - Movimiento de cámara: homografía (paneo + zoom) con optical flow contra keyframes, referida al frame de calibración (el original solo medía un desplazamiento por frame y no lo acumulaba)
 > - Perspectiva: homografía con `cv2.findHomography` a partir de puntos de la cancha configurables (`tools/calibrate_pitch.py`)
 > - Velocidad con el FPS real del video (antes fijo en 24) y descarte de velocidades imposibles
 > - Los dibujos se hacen sobre los frames sin copiarlos (el original triplicaba la RAM) y el video sale en H.264

@@ -1,9 +1,12 @@
-"""Calibracion de perspectiva (pixeles -> metros) sobre el primer frame del video.
+"""Calibracion de perspectiva (pixeles -> metros) sobre un frame del video.
 
 Uso:
-  python tools/calibrate_pitch.py            # clic en puntos de la cancha y escribir sus metros
-  python tools/calibrate_pitch.py --check    # dibuja las lineas de la cancha usando config.py
+  python tools/calibrate_pitch.py                 # clic en puntos de la cancha del frame CALIBRATION_FRAME
+  python tools/calibrate_pitch.py --check         # dibuja la cancha proyectada en ese frame usando config.py
+  python tools/calibrate_pitch.py --check --frame 2000
+      # dibuja la cancha en otro frame siguiendo el movimiento de camara (requiere el stub de camara)
 
+Elige un frame donde se vean varias lineas conocidas y pon su numero en config.CALIBRATION_FRAME.
 Coordenadas en metros: x = distancia a la linea de medio campo (positivo a la derecha),
 y = distancia a la banda superior. Referencias utiles (cancha 105 x 68 m):
   medio campo con bandas: (0, 0) y (0, 68)
@@ -12,6 +15,7 @@ y = distancia a la banda superior. Referencias utiles (cancha 105 x 68 m):
 """
 import argparse
 import os
+import pickle
 import sys
 
 import cv2
@@ -21,12 +25,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import config
 
 
-def read_first_frame(video_path):
+def read_frame(video_path, frame_num):
     cap = cv2.VideoCapture(video_path)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
     ok, frame = cap.read()
     cap.release()
     if not ok:
-        raise FileNotFoundError(f"No se pudo leer {video_path}")
+        raise FileNotFoundError(f"No se pudo leer el frame {frame_num} de {video_path}")
     return frame
 
 
@@ -43,27 +48,41 @@ def pitch_lines_m(length=105, width=68):
     for side in (-1, 1):
         x_goal, x_box = side*half, side*(half-16.5)
         lines.append([(x_goal, 13.84), (x_box, 13.84), (x_box, 54.16), (x_goal, 54.16)])
+        x_small = side*(half-5.5)
+        lines.append([(x_goal, 24.84), (x_small, 24.84), (x_small, 43.16), (x_goal, 43.16)])
     return lines
 
 
-def draw_check(frame):
+def camera_to_reference(frame_num):
+    # Homografia frame_num -> CALIBRATION_FRAME a partir del stub del movimiento de camara
+    with open(config.CAMERA_STUB_PATH, 'rb') as f:
+        camera_movement = pickle.load(f)
+    H_to_first = np.array(camera_movement[frame_num])
+    H_ref_to_first = np.array(camera_movement[config.CALIBRATION_FRAME])
+    return np.linalg.inv(H_ref_to_first) @ H_to_first
+
+
+def draw_check(frame, frame_to_reference=np.eye(3)):
     H, _ = cv2.findHomography(np.float32(config.PITCH_POINTS_PX), np.float32(config.PITCH_POINTS_M))
-    H_inv = np.linalg.inv(H)
+    # metros -> pixeles del frame de referencia -> pixeles de este frame
+    meters_to_frame = np.linalg.inv(frame_to_reference) @ np.linalg.inv(H)
     out = frame.copy()
+    thickness = max(1, round(frame.shape[0]/540))
     for line in pitch_lines_m(config.PITCH_LENGTH_M, config.PITCH_WIDTH_M):
-        pts = cv2.perspectiveTransform(np.float32(line).reshape(-1, 1, 2), H_inv)
-        cv2.polylines(out, [pts.astype(np.int32)], False, (255, 0, 255), 2)
+        pts = cv2.perspectiveTransform(np.float32(line).reshape(-1, 1, 2), meters_to_frame)
+        cv2.polylines(out, [pts.astype(np.int32)], False, (255, 0, 255), thickness)
     # Cuadricula cada 10 m
     for x in range(-50, 51, 10):
-        pts = cv2.perspectiveTransform(np.float32([(x, 0), (x, 68)]).reshape(-1, 1, 2), H_inv)
+        pts = cv2.perspectiveTransform(np.float32([(x, 0), (x, 68)]).reshape(-1, 1, 2), meters_to_frame)
         cv2.polylines(out, [pts.astype(np.int32)], False, (0, 255, 255), 1)
-    for px in config.PITCH_POINTS_PX:
-        cv2.circle(out, tuple(map(int, px)), 6, (0, 0, 255), -1)
 
-    # Error de reproyeccion de los puntos de calibracion
-    proj = cv2.perspectiveTransform(np.float32(config.PITCH_POINTS_PX).reshape(-1, 1, 2), H).reshape(-1, 2)
-    errors = np.linalg.norm(proj - np.float32(config.PITCH_POINTS_M), axis=1)
-    print("Error por punto (m):", np.round(errors, 2))
+    if np.allclose(frame_to_reference, np.eye(3)):
+        for px in config.PITCH_POINTS_PX:
+            cv2.circle(out, tuple(map(int, px)), 4, (0, 0, 255), -1)
+        # Error de reproyeccion de los puntos de calibracion
+        proj = cv2.perspectiveTransform(np.float32(config.PITCH_POINTS_PX).reshape(-1, 1, 2), H).reshape(-1, 2)
+        errors = np.linalg.norm(proj - np.float32(config.PITCH_POINTS_M), axis=1)
+        print("Error por punto (m):", np.round(errors, 2))
     return out
 
 
@@ -103,12 +122,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--video', default=config.VIDEO_PATH)
     parser.add_argument('--check', action='store_true', help='Dibujar la cancha proyectada con config.py')
+    parser.add_argument('--frame', type=int, default=config.CALIBRATION_FRAME,
+                        help='Frame a revisar (distinto de CALIBRATION_FRAME usa el stub de camara)')
     parser.add_argument('--output', default='output_videos/calibration_check.jpg')
     args = parser.parse_args()
 
-    frame = read_first_frame(args.video)
+    frame = read_frame(args.video, args.frame)
     if args.check:
-        cv2.imwrite(args.output, draw_check(frame))
+        to_ref = np.eye(3) if args.frame == config.CALIBRATION_FRAME else camera_to_reference(args.frame)
+        cv2.imwrite(args.output, draw_check(frame, to_ref))
         print(f"Imagen guardada en {args.output}")
     else:
         click_points(frame)

@@ -1,6 +1,6 @@
 # Taller: Visión por computadora con YOLO aplicada al fútbol ⚽
 
-Analizamos un clip de 25 s del partido **Chequia vs Sudáfrica (Mundial 2026)**. Detectamos jugadores, árbitros y balón con YOLO, los seguimos con ByteTrack, asignamos equipos con K-Means, calculamos la posesión y, como bonus, medimos la velocidad de cada jugador en km/h.
+Analizamos 79 s de juego continuo (minuto 3:11–4:30 de la transmisión) del partido **Chequia vs Sudáfrica (Mundial 2026)**. Detectamos jugadores, árbitros y balón con YOLO, los seguimos con ByteTrack, asignamos equipos con K-Means, calculamos la posesión y, como bonus, medimos la velocidad de cada jugador en km/h.
 
 **Duración:** ~2 h · **Nivel:** intermedio (saber Python; no hace falta experiencia en visión)
 
