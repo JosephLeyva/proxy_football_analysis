@@ -50,7 +50,7 @@ def main(recompute=False, draw_ids=config.DRAW_TRACK_IDS, draw_speed=config.DRAW
 
     # camera movement estimator
     camera_movement_estimator = CameraMovementEstimator(video_frames[0],
-                                                        overlay_boxes=config.OVERLAY_BOXES,
+                                                        overlay_boxes=config.CAMERA_EXCLUDE_BOXES,
                                                         text_box=config.CAMERA_MOVEMENT_BOX,
                                                         reference_frame=config.CALIBRATION_FRAME)
     camera_movement_per_frame = camera_movement_estimator.get_camera_movement(video_frames,

@@ -40,6 +40,33 @@ class CameraMovementEstimator():
             mask = mask_features
         )
 
+    @staticmethod
+    def _homography_is_sane(H, frame_shape, max_scale=6.0, min_scale=1/6.0, max_offset_factor=3.0):
+        # findHomography puede devolver una matriz "valida" (RANSAC encontro inliers) pero
+        # mal condicionada: si los puntos sobrevivientes quedan casi colineales o agrupados en
+        # una esquina, el ajuste global puede ser una fantasia aunque el error de reproyeccion
+        # de esos pocos puntos sea bajo. Se descarta si al proyectar las esquinas del frame el
+        # area cambia de forma absurda o el centro se va lejisimos: un pan/zoom real no hace eso.
+        if H is None or not np.all(np.isfinite(H)):
+            return False
+        h, w = frame_shape[:2]
+        corners = np.float32([[0,0],[w,0],[w,h],[0,h]]).reshape(-1,1,2)
+        try:
+            projected = cv2.perspectiveTransform(corners, H).reshape(-1,2)
+        except cv2.error:
+            return False
+        if not np.all(np.isfinite(projected)):
+            return False
+        x, y = projected[:,0], projected[:,1]
+        area = 0.5*abs(np.dot(x, np.roll(y,1)) - np.dot(y, np.roll(x,1)))
+        orig_area = w*h
+        if not (orig_area*min_scale**2 <= area <= orig_area*max_scale**2):
+            return False
+        center = projected.mean(axis=0)
+        if np.linalg.norm(center - [w/2, h/2]) > max(w,h)*max_offset_factor:
+            return False
+        return True
+
     def to_reference(self, camera_movement_per_frame, frame_num):
         # Homografia: pixeles del frame frame_num -> pixeles del frame de referencia
         H_to_first = np.array(camera_movement_per_frame[frame_num])
@@ -83,12 +110,21 @@ class CameraMovementEstimator():
             H = None
             if len(features) >= 15:
                 H, inliers = cv2.findHomography(features, key_features, cv2.RANSAC, 2.0)
+                if H is not None:
+                    candidate = H_key_to_first @ H
+                    candidate /= candidate[2,2]
+                    if not self._homography_is_sane(candidate, frames[0].shape):
+                        # Ajuste "valido" para RANSAC pero geometricamente absurdo (puntos casi
+                        # colineales tras un mal keyframe): se descarta en vez de contaminar el
+                        # resto del video con una homografia degenerada que nunca se corrige sola.
+                        H = None
             if H is None:
                 H_to_first = np.array(camera_movement[-1])
+                # inliers todo en False: la linea de abajo vacia key_features/features, forzando
+                # un keyframe nuevo cuanto antes (este set de puntos ya demostro dar ajustes malos)
                 inliers = np.zeros((len(features),1))
             else:
-                H_to_first = H_key_to_first @ H
-                H_to_first /= H_to_first[2,2]
+                H_to_first = candidate
             camera_movement.append(H_to_first.tolist())
 
             # Los puntos que no encajan (jugadores) se descartan para siempre

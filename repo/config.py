@@ -4,10 +4,10 @@
 
 # Rutas
 VIDEO_PATH = 'input_videos/wc2026_clip.mp4'
-OUTPUT_PATH = 'output_videos/wc2026_output.mp4'
+OUTPUT_PATH = 'output_videos/wc2026_clip_output.mp4'
 MODEL_PATH = 'models/best.pt'
-TRACK_STUB_PATH = 'stubs/wc2026_track_stubs.pkl'
-CAMERA_STUB_PATH = 'stubs/wc2026_camera_movement_stub.pkl'
+TRACK_STUB_PATH = 'stubs/wc2026_clip_track_stubs.pkl'
+CAMERA_STUB_PATH = 'stubs/wc2026_clip_camera_movement_stub.pkl'
 
 # Maximo de segundos que se cargan en memoria (read_video guarda todos los frames en RAM:
 # ~2.7 MB por frame a 720p, ~6 MB a 1080p). 79 s a 720p son ~6.5 GB; Colab tiene ~12 GB.
@@ -21,6 +21,14 @@ OVERLAY_BOXES = [
     (1565, 40, 1840, 112),
 ]
 
+# Valla LED perimetral (publicidad con texto que cambia/scrollea, ej. BYJU'S, Hisense): no es un
+# overlay de TV, es parte de la escena, pero su contenido se mueve sin que se mueva la camara y
+# corrompe el tracking de optical flow para movimiento de camara. Se excluye solo de ese calculo
+# (no de la deteccion de jugadores, que ya se filtra aparte con la mascara de pasto).
+CAMERA_EXCLUDE_BOXES = OVERLAY_BOXES + [
+    (0, 320, 1920, 400),
+]
+
 # Deteccion
 DETECTION_CONF = 0.1
 
@@ -28,23 +36,9 @@ DETECTION_CONF = 0.1
 # posicion real (metros). El movimiento de camara lleva cada frame a las coordenadas de ese frame.
 # x = metros desde la linea de medio campo (positivo a la derecha), y = metros desde la banda superior.
 # Cancha de 105 x 68 m, circulo central de radio 9.15 m.
-CALIBRATION_FRAME = 150
-PITCH_POINTS_PX = [
-    (572, 115),   # medio campo / banda superior
-    (577, 662),   # medio campo / banda inferior
-    (573, 219),   # circulo central, arriba
-    (574, 339),   # circulo central, abajo
-    (327, 280),   # circulo central, izquierda
-    (817, 274),   # circulo central, derecha
-]
-PITCH_POINTS_M = [
-    (0, 0),
-    (0, 68),
-    (0, 34 - 9.15),
-    (0, 34 + 9.15),
-    (-9.15, 34),
-    (9.15, 34),
-]
+CALIBRATION_FRAME = 0
+PITCH_POINTS_PX = [(902, 472), (902, 258), (904, 1026), (900, 397), (904, 569), (552, 482), (1250, 474)]
+PITCH_POINTS_M = [(0, 34.0), (0, 0), (0, 68), (0, 24.85), (0, 43.15), (-9.15, 34.0), (9.15, 34.0)]
 PITCH_LENGTH_M = 105
 PITCH_WIDTH_M = 68
 # Se dibuja/analiza solo a quien este dentro de la cancha + este margen (m). Los jueces de linea
@@ -66,8 +60,8 @@ CAMERA_MOVEMENT_BOX = (0, 125, 640, 225)
 REFEREE_TEAM_COLOR_RATIO = 0.3
 
 # Que dibujar en el video de salida (se puede cambiar con --ids/--no-ids y --speed/--no-speed)
-DRAW_TRACK_IDS = True
-DRAW_SPEED_DISTANCE = True
+DRAW_TRACK_IDS = False
+DRAW_SPEED_DISTANCE = False
 
 # Balon: huecos sin deteccion mas largos que esto (frames) no se interpolan; el balon no se dibuja
 BALL_MAX_GAP_FRAMES = 20
