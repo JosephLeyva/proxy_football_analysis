@@ -36,8 +36,15 @@ class ViewTransformer():
             for frame_num, track in enumerate(object_tracks):
                 for track_id, track_info in track.items():
                     position = track_info['position_adjusted']
+                    # Sin position_adjusted (toma de otra camara) no se sabe donde esta: no se mide,
+                    # pero tampoco se marca como fuera de la cancha
+                    if position is None:
+                        tracks[object][frame_num][track_id]['position_transformed'] = None
+                        tracks[object][frame_num][track_id]['off_pitch'] = False
+                        continue
                     position = np.array(position)
                     position_trasnformed = self.transform_point(position)
                     if position_trasnformed is not None:
                         position_trasnformed = position_trasnformed.squeeze().tolist()
                     tracks[object][frame_num][track_id]['position_transformed'] = position_trasnformed
+                    tracks[object][frame_num][track_id]['off_pitch'] = position_trasnformed is None

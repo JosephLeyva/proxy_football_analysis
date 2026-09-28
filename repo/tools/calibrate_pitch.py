@@ -131,13 +131,19 @@ def camera_to_reference(frame_num):
     # Homografia frame_num -> CALIBRATION_FRAME a partir del stub del movimiento de camara
     with open(config.CAMERA_STUB_PATH, 'rb') as f:
         camera_movement = pickle.load(f)
+    if camera_movement[frame_num] is None:
+        sys.exit(f"El frame {frame_num} es de una toma que no se pudo enlazar con la del frame de"
+                 " calibracion (primer plano u otra camara): no hay cancha que dibujar.")
     H_to_first = np.array(camera_movement[frame_num])
     H_ref_to_first = np.array(camera_movement[config.CALIBRATION_FRAME])
     return np.linalg.inv(H_ref_to_first) @ H_to_first
 
 
-def draw_check(frame, frame_to_reference=np.eye(3)):
-    H, errors = reprojection_errors(config.PITCH_POINTS_PX, config.PITCH_POINTS_M)
+def draw_check(frame, frame_to_reference=np.eye(3), points_px=None, points_m=None):
+    # Por defecto dibuja la calibracion de config.py; click_points pasa los puntos recien elegidos
+    points_px = config.PITCH_POINTS_PX if points_px is None else points_px
+    points_m = config.PITCH_POINTS_M if points_m is None else points_m
+    H, errors = reprojection_errors(points_px, points_m)
     # metros -> pixeles del frame de referencia -> pixeles de este frame
     meters_to_frame = np.linalg.inv(frame_to_reference) @ np.linalg.inv(H)
     out = frame.copy()
@@ -151,13 +157,13 @@ def draw_check(frame, frame_to_reference=np.eye(3)):
         cv2.polylines(out, [pts.astype(np.int32)], False, (0, 255, 255), 1)
 
     if np.allclose(frame_to_reference, np.eye(3)):
-        for px in config.PITCH_POINTS_PX:
+        for px in points_px:
             cv2.circle(out, tuple(map(int, px)), 4, (0, 0, 255), -1)
         print("Error por punto (m):", np.round(errors, 2))
     return out
 
 
-def click_points(frame):
+def click_points(frame, output):
     points = []
     display = frame.copy()
 
@@ -175,7 +181,8 @@ def click_points(frame):
     cv2.namedWindow('calibracion', cv2.WINDOW_NORMAL)
     cv2.namedWindow('marcas de referencia', cv2.WINDOW_NORMAL)
     cv2.setMouseCallback('calibracion', on_click)
-    print("\nHaz clic en al menos 4 puntos conocidos de la cancha. Enter para terminar, Esc para cancelar.")
+    print("\nHaz clic en al menos 5 puntos conocidos de la cancha (con 4 la homografia pasa exacta por"
+          " ellos y no se puede revisar el error). Enter para terminar, Esc para cancelar.")
     while True:
         cv2.imshow('calibracion', display)
         cv2.imshow('marcas de referencia', diagram)
@@ -208,11 +215,19 @@ def click_points(frame):
     H, errors = reprojection_errors(points, points_m)
     if H is None:
         print("\nNo se pudo calcular la homografia con estos puntos (¿estan muy alineados entre si?).")
-    else:
-        print("\nError de reproyeccion por punto (m):", np.round(errors, 2))
-        if np.any(errors > 2):
-            print("Aviso: algun punto tiene error > 2 m. Revisa si clickeaste o elegiste la marca"
-                  " equivocada antes de usar esta calibracion.")
+        return
+    print("\nError de reproyeccion por punto (m):", np.round(errors, 2))
+    if len(used_ids) < 5:
+        print(f"Aviso: con {len(used_ids)} marcas distintas la homografia pasa exacta por los puntos y el"
+              " error siempre sale ~0, aunque una marca este mal elegida. Revisa la imagen de abajo.")
+    elif np.any(errors > 2):
+        print("Aviso: algun punto tiene error > 2 m. Revisa si clickeaste o elegiste la marca"
+              " equivocada antes de usar esta calibracion.")
+
+    # Las lineas proyectadas tienen que caer sobre las de la cancha: es la revision que de verdad
+    # detecta una calibracion mal hecha
+    cv2.imwrite(output, draw_check(frame, points_px=points, points_m=points_m))
+    print(f"Revisa que las lineas coincidan con la cancha: {output}")
 
     print("\nCopia esto en config.py:\n")
     print("PITCH_POINTS_PX = " + repr(points))
@@ -234,4 +249,4 @@ if __name__ == '__main__':
         cv2.imwrite(args.output, draw_check(frame, to_ref))
         print(f"Imagen guardada en {args.output}")
     else:
-        click_points(frame)
+        click_points(frame, args.output)

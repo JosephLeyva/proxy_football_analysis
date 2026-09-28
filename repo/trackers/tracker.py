@@ -49,10 +49,12 @@ class Tracker:
     def select_ball(self, tracks, to_meters, fps, max_speed=40, memory_seconds=0.5, margin=2,
                     alone_distance=4, mark_radius=1.5, mark_seconds=1):
         # YOLO a veces ve "balones" que no lo son: el punto penal, algo en el borde de la imagen.
-        # to_meters(frame_num, (x, y)) -> np.array([x_m, y_m]). Requiere 'position_transformed' en jugadores.
+        # to_meters(frame_num, (x, y)) -> np.array([x_m, y_m]), o None si ese frame no se puede medir
+        # (toma de otra camara). Requiere 'position_transformed' en jugadores.
 
         # Todas las candidatas en metros, con la distancia al jugador mas cercano
         candidates = []   # (frame_num, posicion_m, bbox, confianza, distancia_jugador)
+        unmeasured = set()
         for frame_num, ball in enumerate(tracks["ball"]):
             if 1 not in ball:
                 continue
@@ -60,6 +62,9 @@ class Tracker:
                                 if p.get("position_transformed") is not None]).reshape(-1, 2)
             for c in ball[1].get("candidates", [ball[1]["bbox"] + [1.0]]):
                 position = to_meters(frame_num, get_center_of_bbox(c[:4]))
+                if position is None:
+                    unmeasured.add(frame_num)
+                    break
                 nearest = np.min(np.linalg.norm(players - position, axis=1)) if len(players) else np.inf
                 candidates.append((frame_num, position, c[:4], c[4], nearest))
 
@@ -84,6 +89,14 @@ class Tracker:
         rejected = 0
         for frame_num in range(len(tracks["ball"])):
             if 1 not in tracks["ball"][frame_num]:
+                continue
+            if frame_num in unmeasured:
+                # Sin metros no hay trayectoria que seguir: la de mayor confianza, y la continuidad
+                # empieza de cero al volver a la toma medible
+                ball = tracks["ball"][frame_num][1]
+                best = max(ball.get("candidates", [ball["bbox"] + [1.0]]), key=lambda c: c[4])
+                tracks["ball"][frame_num] = {1: {"bbox": best[:4]}}
+                last_position, last_frame = None, None
                 continue
             options = by_frame.get(frame_num, [])
             chosen = None
@@ -143,11 +156,12 @@ class Tracker:
 
     def remove_off_pitch(self, tracks):
         # Personas cuyos pies caen fuera de la cancha (en metros): stewards, fotografos y
-        # recogebalones detras de la valla. Requiere position_transformed (ViewTransformer).
+        # recogebalones detras de la valla. Requiere off_pitch (ViewTransformer); en frames de otra
+        # camara no se sabe y se dejan todos.
         removed = 0
         for object in ["players","referees"]:
             for track in tracks[object]:
-                for track_id in [t for t, info in track.items() if info.get('position_transformed') is None]:
+                for track_id in [t for t, info in track.items() if info.get('off_pitch')]:
                     del track[track_id]
                     removed += 1
         return removed
