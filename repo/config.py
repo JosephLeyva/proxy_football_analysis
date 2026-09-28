@@ -1,13 +1,15 @@
-# Configuracion del pipeline para el clip del Mundial 2026 (CZE vs RSA),
-# minuto 3:11-4:30 de la transmision (79 s, 1280x720, 30 fps).
+# Configuracion del pipeline para la final del Mundial 2022 (ARG vs FRA, transmision de TVP).
+# fifa_wide.mp4 es la toma amplia mas larga de fifa_clip.mp4 (20.95-35.7 s, 14.8 s, 1920x1080, 26 fps).
+# fifa_clip.mp4 completo tambien funciona: los cortes a primeros planos se detectan y esos frames
+# quedan sin medir en metros (su frame 930 es el 380 de fifa_wide, con la misma calibracion).
 # Si cambias de video, recalibra con: python tools/calibrate_pitch.py
 
 # Rutas
-VIDEO_PATH = 'input_videos/wc2026_clip.mp4'
-OUTPUT_PATH = 'output_videos/wc2026_output.mp4'
+VIDEO_PATH = 'input_videos/fifa_wide.mp4'
+OUTPUT_PATH = 'output_videos/fifa_wide_output.mp4'
 MODEL_PATH = 'models/best.pt'
-TRACK_STUB_PATH = 'stubs/wc2026_track_stubs.pkl'
-CAMERA_STUB_PATH = 'stubs/wc2026_camera_movement_stub.pkl'
+TRACK_STUB_PATH = 'stubs/fifa_wide_track_stubs.pkl'
+CAMERA_STUB_PATH = 'stubs/fifa_wide_camera_movement_stub.pkl'
 
 # Maximo de segundos que se cargan en memoria (read_video guarda todos los frames en RAM:
 # ~2.7 MB por frame a 720p, ~6 MB a 1080p). 79 s a 720p son ~6.5 GB; Colab tiene ~12 GB.
@@ -15,10 +17,10 @@ MAX_VIDEO_SECONDS = 90
 
 # Todas las cajas (x1, y1, x2, y2) estan en pixeles de 1920x1080 y se escalan a la resolucion real.
 # Overlays de la transmision:
-# marcador de arriba a la izquierda y logo de DSports. Se ignoran para deteccion y optical flow.
+# marcador de arriba a la izquierda y logo de TVP 4K. Se ignoran para deteccion y optical flow.
 OVERLAY_BOXES = [
-    (85, 50, 705, 112),
-    (1565, 40, 1840, 112),
+    (90, 85, 760, 137),
+    (1605, 70, 1790, 155),
 ]
 
 # Deteccion
@@ -28,14 +30,14 @@ DETECTION_CONF = 0.1
 # posicion real (metros). El movimiento de camara lleva cada frame a las coordenadas de ese frame.
 # x = metros desde la linea de medio campo (positivo a la derecha), y = metros desde la banda superior.
 # Cancha de 105 x 68 m, circulo central de radio 9.15 m.
-CALIBRATION_FRAME = 150
+CALIBRATION_FRAME = 380
 PITCH_POINTS_PX = [
-    (572, 115),   # medio campo / banda superior
-    (577, 662),   # medio campo / banda inferior
-    (573, 219),   # circulo central, arriba
-    (574, 339),   # circulo central, abajo
-    (327, 280),   # circulo central, izquierda
-    (817, 274),   # circulo central, derecha
+    (933, 309),   # medio campo / banda superior
+    (937, 1034),  # medio campo / banda inferior
+    (934, 438),   # circulo central, arriba
+    (935, 595),   # circulo central, abajo
+    (561, 507),   # circulo central, izquierda
+    (1307, 506),  # circulo central, derecha
 ]
 PITCH_POINTS_M = [
     (0, 0),

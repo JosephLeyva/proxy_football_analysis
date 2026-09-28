@@ -79,7 +79,7 @@ def main(recompute=False, draw_ids=config.DRAW_TRACK_IDS, draw_speed=config.DRAW
     # Balon: de las candidatas de YOLO, la que sigue la trayectoria (descarta el punto penal, etc.)
     def ball_to_meters(frame_num, point):
         H = camera_movement_estimator.to_reference(camera_movement_per_frame, frame_num)
-        return view_transformer.pixel_to_meters(point, H)
+        return None if H is None else view_transformer.pixel_to_meters(point, H)
     rejected = tracker.select_ball(tracks, ball_to_meters, fps)
     print(f"{rejected} detecciones de balon descartadas por no seguir la trayectoria")
 
