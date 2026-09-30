@@ -9,10 +9,11 @@ from player_ball_assigner import PlayerBallAssigner
 from camera_movement_estimator import CameraMovementEstimator
 from view_transformer import ViewTransformer
 from speed_and_distance_estimator import SpeedAndDistance_Estimator
+from mini_map import MiniMapDrawer
 
 
 def main(recompute=False, draw_ids=config.DRAW_TRACK_IDS, draw_speed=config.DRAW_SPEED_DISTANCE,
-         output_path=config.OUTPUT_PATH):
+         draw_minimap=config.MINI_MAP, output_path=config.OUTPUT_PATH):
     use_stubs = not recompute
 
     # Read Video
@@ -91,6 +92,16 @@ def main(recompute=False, draw_ids=config.DRAW_TRACK_IDS, draw_speed=config.DRAW
                                                               max_speed_kmh=config.MAX_PLAYER_SPEED_KMH)
     speed_and_distance_estimator.add_speed_and_distance_to_tracks(tracks)
 
+    # Mini-mapa: radar de la cancha completa
+    mini_map_drawer = MiniMapDrawer(pitch_length=config.PITCH_LENGTH_M,
+                                    pitch_width=config.PITCH_WIDTH_M,
+                                    box=config.MINI_MAP_BOX,
+                                    bg_color=config.MINI_MAP_BG_COLOR,
+                                    bg_alpha=config.MINI_MAP_BG_ALPHA,
+                                    line_color=config.MINI_MAP_LINE_COLOR,
+                                    player_radius=config.MINI_MAP_PLAYER_RADIUS,
+                                    ball_carrier_color=config.MINI_MAP_BALL_CARRIER_COLOR)
+
     # Assign Ball Aquisition
     player_assigner =PlayerBallAssigner(max_player_ball_distance=config.MAX_PLAYER_BALL_DISTANCE)
     team_ball_control= []
@@ -118,6 +129,10 @@ def main(recompute=False, draw_ids=config.DRAW_TRACK_IDS, draw_speed=config.DRAW
     if draw_speed:
         speed_and_distance_estimator.draw_speed_and_distance(output_video_frames,tracks)
 
+    ## Draw Mini Map
+    if draw_minimap:
+        output_video_frames = mini_map_drawer.draw_mini_map(output_video_frames, tracks)
+
     # Save video
     save_video(output_video_frames, output_path, fps=fps)
     print(f"Video guardado en {output_path}")
@@ -130,7 +145,10 @@ if __name__ == '__main__':
                         help='Dibujar el ID de cada jugador (default: config.DRAW_TRACK_IDS)')
     parser.add_argument('--speed', action=argparse.BooleanOptionalAction, default=config.DRAW_SPEED_DISTANCE,
                         help='Dibujar velocidad y distancia recorrida (default: config.DRAW_SPEED_DISTANCE)')
+    parser.add_argument('--minimap', action=argparse.BooleanOptionalAction, default=config.MINI_MAP,
+                        help='Dibujar mini-mapa de posiciones (default: config.MINI_MAP)')
     parser.add_argument('--output', default=config.OUTPUT_PATH,
                         help='Ruta del video de salida (default: config.OUTPUT_PATH)')
     args = parser.parse_args()
-    main(recompute=args.recompute, draw_ids=args.ids, draw_speed=args.speed, output_path=args.output)
+    main(recompute=args.recompute, draw_ids=args.ids, draw_speed=args.speed,
+         draw_minimap=args.minimap, output_path=args.output)
