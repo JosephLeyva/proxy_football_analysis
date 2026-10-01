@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Computer-vision pipeline that detects/tracks players, referees, and the ball in a football (soccer) clip with YOLO, assigns players to teams via K-Means on shirt color, tracks ball possession, estimates camera movement (pan **and zoom**) via optical flow, applies a perspective homography to convert pixel positions to meters, and computes player speed/distance. This is the adapted version used for a workshop (`taller/`) on a 2026 World Cup clip; the original base project is abdullahtarek/football_analysis.
+Computer-vision pipeline that detects/tracks players, referees, and the ball in a football (soccer) clip with YOLO, assigns players to teams via K-Means on shirt color, tracks ball possession, estimates camera movement (pan **and zoom**) via optical flow, applies a perspective homography to convert pixel positions to meters, and computes player speed/distance. This is the adapted version used for a workshop (`taller/`); the original base project is abdullahtarek/football_analysis. `config.py` is the single source of truth for which clip/match is currently active for the root pipeline — its header comment names the video and calibration frame in use, which can differ from the clip the `taller/` notebook targets.
 
 ## Commands
 
@@ -15,6 +15,7 @@ python main.py                       # run pipeline, reusing cached stubs in stu
 python main.py --recompute           # ignore stubs; rerun YOLO detection/tracking and optical flow
 python main.py --no-ids              # skip drawing player track IDs
 python main.py --no-speed            # skip drawing speed/distance overlay
+python main.py --minimap             # draw bottom-center pitch mini-map (radar) of player positions
 python main.py --output path.mp4     # custom output path
 
 python tools/calibrate_pitch.py                     # click pitch points on config.CALIBRATION_FRAME to derive PITCH_POINTS_PX/M
@@ -28,7 +29,7 @@ There is no test suite, linter, or build step in this repo.
 
 ## Architecture
 
-`main.py` wires together a fixed pipeline of independent stage objects, each living in its own top-level package (`trackers`, `camera_movement_estimator`, `team_assigner`, `player_ball_assigner`, `view_transformer`, `speed_and_distance_estimator`, `utils`). All tunable parameters (paths, pitch calibration, thresholds, overlay boxes, draw flags) live in `config.py`, not in the stage classes — always change behavior there rather than hardcoding values in modules.
+`main.py` wires together a fixed pipeline of independent stage objects, each living in its own top-level package (`trackers`, `camera_movement_estimator`, `team_assigner`, `player_ball_assigner`, `view_transformer`, `speed_and_distance_estimator`, `mini_map`, `utils`). All tunable parameters (paths, pitch calibration, thresholds, overlay boxes, draw flags) live in `config.py`, not in the stage classes — always change behavior there rather than hardcoding values in modules.
 
 Pipeline order (see `main.py`):
 1. `utils.read_video` loads frames into memory (capped by `config.MAX_VIDEO_SECONDS` — the whole clip is held in RAM; comments in `config.py` estimate RAM per frame at the source resolution).
@@ -42,7 +43,7 @@ Pipeline order (see `main.py`):
 9. `tracker.interpolate_ball_positions` interpolates only gaps shorter than `config.BALL_MAX_GAP_FRAMES`; longer gaps are left without a ball rather than drawing a straight-line guess across a long occlusion.
 10. `SpeedAndDistance_Estimator` uses the real video FPS (`utils.get_video_fps`) and discards speeds above `config.MAX_PLAYER_SPEED_KMH` as measurement noise.
 11. `PlayerBallAssigner` assigns possession per frame by foot-to-ball distance (`config.MAX_PLAYER_BALL_DISTANCE`); when no one is close enough (or the ball wasn't resolved that frame), possession carries over from the previous frame.
-12. Drawing/annotation happens last and mutates frames in place (not copies, to limit RAM) before `utils.save_video` writes H.264 output. `--ids`/`--no-ids` and `--speed`/`--no-speed` CLI flags (defaulting to `config.DRAW_TRACK_IDS`/`DRAW_SPEED_DISTANCE`) toggle what gets drawn. All on-screen boxes/text in `config.py` and drawing code are defined in 1920x1080 pixel space and scaled to the source resolution via `utils.scale_boxes`.
+12. Drawing/annotation happens last and mutates frames in place (not copies, to limit RAM) before `utils.save_video` writes H.264 output. `--ids`/`--no-ids`, `--speed`/`--no-speed`, and `--minimap`/`--no-minimap` CLI flags (defaulting to `config.DRAW_TRACK_IDS`/`DRAW_SPEED_DISTANCE`/`MINI_MAP`) toggle what gets drawn. All on-screen boxes/text in `config.py` and drawing code are defined in 1920x1080 pixel space and scaled to the source resolution via `utils.scale_boxes`. `mini_map.MiniMapDrawer` renders a bottom-center schematic pitch (`config.MINI_MAP_BOX`) with a dot per player at its `position_transformed` (meters) — players are skipped for frames where that's `None` (unlinked camera shot), and the ball-possessing player's dot is drawn in `config.MINI_MAP_BALL_CARRIER_COLOR` instead of its team color; the ball itself and referees are not plotted.
 
 ### Camera model: pan + zoom, not just translation
 
@@ -56,4 +57,4 @@ Broadcast clips also cut to other cameras (close-ups, replays), which optical fl
 
 Stubs (`stubs/*.pkl`) cache the expensive YOLO tracking and optical flow results per source video; regenerate them with `--recompute` whenever the input video, detection model, or `config.CALIBRATION_FRAME` changes. `config.py` is the single source of truth for which video/model/stub files are active — when switching to a different clip, update `VIDEO_PATH`, the stub paths, and re-run pitch calibration.
 
-`taller/` and `training/` contain workshop/notebook material (Spanish-language), not part of the runtime pipeline.
+`taller/`, `training/`, and `development_and_analysis/` contain workshop/notebook material (Spanish-language), not part of the runtime pipeline. `docs/GUIA_USUARIO.md` is a Spanish-language end-user guide, not developer documentation.

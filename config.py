@@ -63,13 +63,25 @@ MAX_PLAYER_BALL_DISTANCE = 50
 BALL_CONTROL_BOX = (1350, 870, 1900, 990)
 CAMERA_MOVEMENT_BOX = (0, 125, 640, 225)
 
+# Mini-mapa: radar esquematico de la cancha completa, abajo al centro (pixeles de 1920x1080).
+# Reusa PITCH_LENGTH_M/PITCH_WIDTH_M para ubicar a cada jugador dentro del cuadro.
+# las coordenadas de la caja son (x1, y1, x2, y2) en pixeles de 1920x1080
+MINI_MAP_BOX = (760, 850, 1160, 1046)
+MINI_MAP_BG_COLOR = (40, 90, 40)      # verde cancha, BGR
+MINI_MAP_BG_ALPHA = 0.6
+MINI_MAP_LINE_COLOR = (255, 255, 255)
+MINI_MAP_PLAYER_RADIUS = 5
+MINI_MAP_BALL_CARRIER_COLOR = (0, 255, 255)   # amarillo: distinto de cualquier team_color/fondo
+
 # Un track de "arbitro" pasa a jugador si su camiseta esta mucho mas cerca de un equipo que del otro:
 # distancia al equipo mas cercano < REFEREE_TEAM_COLOR_RATIO * distancia al otro equipo
 REFEREE_TEAM_COLOR_RATIO = 0.3
 
-# Que dibujar en el video de salida (se puede cambiar con --ids/--no-ids y --speed/--no-speed)
-DRAW_TRACK_IDS = True
-DRAW_SPEED_DISTANCE = True
+# Que dibujar en el video de salida (se puede cambiar con --ids/--no-ids, --speed/--no-speed
+# y --minimap/--no-minimap)
+DRAW_TRACK_IDS = False
+DRAW_SPEED_DISTANCE = False
+MINI_MAP = True
 
 # Balon: huecos sin deteccion mas largos que esto (frames) no se interpolan; el balon no se dibuja
 BALL_MAX_GAP_FRAMES = 20
