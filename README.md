@@ -1,6 +1,6 @@
 # Football Analysis Project
 
-> **Versión adaptada para el taller "Visión con YOLO aplicada al fútbol"** (clip del Mundial 2026, CZE vs RSA, minuto 3:11–4:30 a 720p).
+> **Versión adaptada para el taller "Visión con YOLO aplicada al fútbol"** (toma abierta de ~15 s de la final del Mundial 2022, ARG vs FRA, a 1080p: `input_videos/fifa_wide.mp4`).
 > Notebook del taller: [`taller/taller_futbol_yolo.ipynb`](taller/taller_futbol_yolo.ipynb) · Guía: [`taller/README.md`](taller/README.md)
 >
 > ```bash

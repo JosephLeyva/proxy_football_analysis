@@ -12,7 +12,7 @@ TRACK_STUB_PATH = 'stubs/fifa_wide_track_stubs.pkl'
 CAMERA_STUB_PATH = 'stubs/fifa_wide_camera_movement_stub.pkl'
 
 # Maximo de segundos que se cargan en memoria (read_video guarda todos los frames en RAM:
-# ~2.7 MB por frame a 720p, ~6 MB a 1080p). 79 s a 720p son ~6.5 GB; Colab tiene ~12 GB.
+# ~2.7 MB por frame a 720p, ~6 MB a 1080p). Este clip (387 frames a 1080p) son ~2.4 GB; Colab tiene ~12 GB.
 MAX_VIDEO_SECONDS = 90
 
 # Todas las cajas (x1, y1, x2, y2) estan en pixeles de 1920x1080 y se escalan a la resolucion real.
