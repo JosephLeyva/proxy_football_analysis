@@ -8,6 +8,10 @@ Analizamos una toma abierta continua de ~15 s (387 frames a 1080p) de la **final
 - Una cuenta de Google (para usar Colab)
 - Navegador; no hay que instalar nada
 
+## Dos versiones del notebook
+- `taller_futbol_yolo_alumno.ipynb`: la que usan los alumnos, con 7 huecos ✏️ (pista, verificación y solución desplegable en cada uno).
+- `taller_futbol_yolo.ipynb`: la del instructor, completa. Después de editarla, regenera la del alumno con `python tools/make_student_notebook.py`.
+
 ## Cómo empezar
 1. Abre el notebook en Colab: `<link al notebook en Colab>`
 2. `Entorno de ejecución → Cambiar tipo de entorno de ejecución → GPU T4`

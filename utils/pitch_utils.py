@@ -4,7 +4,7 @@ import numpy as np
 def get_pitch_mask(frame):
     # Mascara de la cancha: pixeles verdes (pasto), cerrando huecos de lineas y jugadores
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    green = cv2.inRange(hsv, (30, 40, 40), (90, 255, 255))
+    green = cv2.inRange(hsv, (35, 60, 40), (85, 255, 255))
 
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (51, 51))
     green = cv2.morphologyEx(green, cv2.MORPH_CLOSE, kernel)
