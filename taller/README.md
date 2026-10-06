@@ -1,12 +1,16 @@
 # Taller: Visión por computadora con YOLO aplicada al fútbol ⚽
 
-Analizamos 79 s de juego continuo (minuto 3:11–4:30 de la transmisión) del partido **Chequia vs Sudáfrica (Mundial 2026)**. Detectamos jugadores, árbitros y balón con YOLO, los seguimos con ByteTrack, asignamos equipos con K-Means, calculamos la posesión y, como bonus, medimos la velocidad de cada jugador en km/h.
+Analizamos una toma abierta continua de ~15 s (387 frames a 1080p) de la **final del Mundial Qatar 2022, Argentina vs Francia**. Detectamos jugadores, árbitros y balón con YOLO, los seguimos con ByteTrack, asignamos equipos con K-Means, calculamos la posesión y, como bonus, medimos la velocidad de cada jugador en km/h.
 
 **Duración:** ~2 h · **Nivel:** intermedio (saber Python; no hace falta experiencia en visión)
 
 ## Qué necesitas
 - Una cuenta de Google (para usar Colab)
 - Navegador; no hay que instalar nada
+
+## Dos versiones del notebook
+- `taller_futbol_yolo_alumno.ipynb`: la que usan los alumnos, con 7 huecos ✏️ (pista, verificación y solución desplegable en cada uno).
+- `taller_futbol_yolo.ipynb`: la del instructor, completa. Después de editarla, regenera la del alumno con `python tools/make_student_notebook.py`.
 
 ## Cómo empezar
 1. Abre el notebook en Colab: `<link al notebook en Colab>`
@@ -39,4 +43,4 @@ Si la GPU va lenta o no hay GPU disponible, deja `USE_STUBS = True`: el notebook
 - Código base: [abdullahtarek/football_analysis](https://github.com/abdullahtarek/football_analysis)
 - Dataset: [Roboflow football-players-detection](https://universe.roboflow.com/roboflow-jvuqo/football-players-detection-3zvbc)
 - [Ultralytics YOLO](https://docs.ultralytics.com) · [supervision](https://supervision.roboflow.com)
-- Video: transmisión de DSports, Copa Mundial de la FIFA 2026, usado con fines educativos
+- Video: transmisión de TVP, final de la Copa Mundial de la FIFA Qatar 2022, usado con fines educativos
