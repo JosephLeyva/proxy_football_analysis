@@ -19,6 +19,25 @@ Analizamos una toma abierta continua de ~15 s (387 frames a 1080p) de la **final
 
 Si la GPU va lenta o no hay GPU disponible, deja `USE_STUBS = True`: el notebook carga los resultados de YOLO precalculados y todo lo demás corre igual.
 
+## Demo en vivo: YOLO COCO con la webcam (instructor)
+`webcam_coco.py` corre YOLO11n preentrenado en COCO (80 clases) sobre la webcam en tiempo real. Sirve de gancho para la sección 1: un balón real sale como `sports ball` y las personas como `person`, pero COCO no distingue jugador, árbitro ni portero; de ahí la sección 2. Corre en local, no en Colab (Colab no puede leer tu webcam como video en vivo).
+
+```bash
+# desde la raíz del repo, con el entorno activado (pip install -r requirements.txt)
+python taller/webcam_coco.py                                 # webcam 0
+python taller/webcam_coco.py --source 1                      # otra cámara
+python taller/webcam_coco.py --classes person "sports ball"  # solo estas clases
+python taller/webcam_coco.py --list-classes                  # lista las 80 clases
+python taller/webcam_coco.py --source input_videos/clip.mp4  # un video en vez de la webcam
+python taller/webcam_coco.py --model yolo11s.pt --conf 0.4   # modelo más grande (se descarga solo)
+```
+
+Teclas: `q`/`ESC` salir · `espacio` pausa · `s` captura en `output_videos/`.
+
+- En CPU, `yolo11n` va a ~10 FPS; con `--imgsz 320` va más fluido a cambio de perder objetos pequeños.
+- Con un video, se saltan cuadros para reproducirlo a velocidad real; `--all-frames` los procesa todos (se ve en cámara lenta).
+- Los cuadros de más de 1280 px de ancho se reducen antes de procesarse (`--max-width`, `0` para desactivarlo).
+
 ## Agenda
 
 | # | Tema | Tiempo |
